@@ -3,12 +3,13 @@ import logo from '../logo.svg'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { Button } from '@/components/ui/button'
-import { parseEther, parseAbi } from 'viem'
+import { parseEther, parseAbi, type Abi, decodeEventLog, decodeAbiParameters, parseAbiParameters } from 'viem'
 
 import {
   type Secret,
   hashPrecommitment,
 } from "@0xbow/privacy-pools-core-sdk";
+
 
 const CONTRACT_ABI = parseAbi([
   "function deposit(uint256 precommitmentHash) external payable",
@@ -66,12 +67,14 @@ function App() {
       console.log("⏳ Waiting for deposit transaction...");
       const receipt = await publicClient.waitForTransactionReceipt({ hash: depositTx });
       console.log("receipt", receipt);
-      
+     
       // Get the event logs
-      // const logs = receipt.logs.filter((log: { topics: string[] }) => 
-      //   log.topics[0] === "0xe3b53cd1a44fbf11535e145d80b8ef1ed6d57a73bf5daa7e939b6b01657d6549"
-      // );
-      
+      const logs = receipt.logs.filter((log: { topics: string[] }) => 
+        log.topics[0] === "0xe3b53cd1a44fbf11535e145d80b8ef1ed6d57a73bf5daa7e939b6b01657d6549"
+      );
+      const decodedValues = decodeAbiParameters(parseAbiParameters('uint256, uint256, uint256, uint256'), logs[0].data);
+      console.log("_label", decodedValues[1]);
+
       console.log("✅ Deposit successful! Transaction hash:", depositTx);
     } catch (error: any) {
       console.error("Error during deposit:", error);
