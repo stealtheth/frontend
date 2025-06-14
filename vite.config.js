@@ -16,5 +16,17 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src'),
     },
+  },
+  define: {
+    'process.env': {},
+    'process.platform': JSON.stringify('browser'),
+    'process.version': JSON.stringify('v16.0.0'),
+    'process.versions': JSON.stringify({}),
+    'process': {
+      env: {},
+      platform: 'browser',
+      version: 'v16.0.0',
+      versions: {}
+    }
   }
 });

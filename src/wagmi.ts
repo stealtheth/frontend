@@ -1,5 +1,5 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
-import { arbitrum, base, mainnet, optimism, polygon } from 'wagmi/chains';
+import { sepolia } from 'wagmi/chains';
 import { title } from './constants';
 import { http } from 'viem';
 
@@ -13,13 +13,9 @@ function drpcUrl(drpcChain: string) {
 export const config = getDefaultConfig({
   appName: title,
   projectId: WALLETCONNECT_PROJECT_ID,
-  chains: [mainnet, polygon, optimism, arbitrum, base],
+  chains: [sepolia],
   transports: {
-    [mainnet.id]: http(drpcUrl('ethereum')),
-    [polygon.id]: http(drpcUrl('polygon')),
-    [optimism.id]: http(drpcUrl('optimism')),
-    [arbitrum.id]: http(drpcUrl('arbitrum')),
-    [base.id]: http(drpcUrl('base')),
+    [sepolia.id]: http(drpcUrl('sepolia')),
   },
   ssr: false,
 });

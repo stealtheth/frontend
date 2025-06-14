@@ -10,22 +10,27 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@0xbow/privacy-pools-core-sdk": "^0.1.21",
+    "@radix-ui/react-slot": "^1.2.3",
     "@rainbow-me/rainbowkit": "^2.2.5",
     "@tailwindcss/vite": "^4.0.6",
     "@tanstack/react-query": "^5.77.2",
     "@tanstack/react-router": "^1.114.3",
     "@tanstack/react-router-devtools": "^1.114.3",
     "@tanstack/router-plugin": "^1.114.3",
+    "assert": "^2.1.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "ethers": "^6.0.0",
     "lucide-react": "^0.476.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.2",
     "tailwindcss": "^4.0.6",
     "tailwindcss-animate": "^1.0.7",
+    "util": "^0.12.5",
     "viem": "2.x",
-    "wagmi": "2.14.x"
+    "wagmi": "^2.15.6"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.0",
