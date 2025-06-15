@@ -30,11 +30,12 @@ import { Identity } from "@semaphore-protocol/identity"
 import { prepareUSDCOp } from '@/lib/usdc';
 import { Input } from '@/components/ui/input';
 import { useState } from 'react';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 
 
 import { extractViewingPrivateKeyNode, generateEphemeralPrivateKey, generateFluidkeyMessage, generateKeysFromSignature, generateStealthAddresses, generateStealthPrivateKey } from "@fluidkey/stealth-account-kit"
 import { privateKeyToAccount } from 'viem/accounts';
+import { getPrivateKeyForSigner } from '@/lib/stealth';
+import { StealthTable } from '@/components/StealthTable';
 
 
 const CONTRACT_ABI = parseAbi([
@@ -75,7 +76,7 @@ function App() {
   })
 
   const [stealthAddresses, setStealthAddresses] = useState<string[]>([]);
-
+  const [stealthPrivateKeys, setStealthPrivateKeys] = useState<string[]>([]);
   
   const setupZerodev = async () => {
     if (!publicClient || !walletClient || !address) return;
@@ -205,6 +206,7 @@ function App() {
     const endNonce = 10;
 
     const _stealthAddresses: string[] = [];
+    const _stealthPrivateKeys: string[] = [];
 
     for (let i = startNonce; i < endNonce; i++) {
       const { ephemeralPrivateKey } = generateEphemeralPrivateKey({
@@ -217,16 +219,15 @@ function App() {
         spendingPublicKeys: [spendingPublicKey],
         ephemeralPrivateKey: ephemeralPrivateKey,
       });
-
-      
-
-      // const stealthPrivateKey = generateStealthPrivateKey({ ephemeralPublicKey: ephemeralPrivateKey, spendingPrivateKey})
+      const stealthPrivateKey = getPrivateKeyForSigner({ ephemeralPrivateKey, spendingPrivateKey, spendingPublicKey })
 
       _stealthAddresses.push(stealthAddresses[0])
+      _stealthPrivateKeys.push(stealthPrivateKey.slice(2))
 
     }
 
     setStealthAddresses(_stealthAddresses);
+    setStealthPrivateKeys(_stealthPrivateKeys);
   }
 
   const handleDeposit = async () => {
@@ -311,20 +312,7 @@ function App() {
           Send USDC to {toAddress} using ZeroDev
         </Button>
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Stealth Address</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {stealthAddresses.map((address) => (
-              <TableRow key={address}>
-                <TableCell>{address}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <StealthTable stealthAddresses={stealthAddresses} stealthPrivateKeys={stealthPrivateKeys} />
       </div>
     </div>
   )
