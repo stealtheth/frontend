@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
-import logo from '../logo.svg'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { sepolia } from 'wagmi/chains';
@@ -11,7 +10,7 @@ import {
   parseAbiParameters,
   createPublicClient,
   http,
-  zeroAddress,
+  isAddress,
 } from 'viem'
 
 import {
@@ -28,6 +27,9 @@ import {
 } from "@zerodev/sdk"
 
 import { Identity } from "@semaphore-protocol/identity"
+import { prepareUSDCOp } from '@/lib/usdc';
+import { Input } from '@/components/ui/input';
+import { useState } from 'react';
 
 
 const CONTRACT_ABI = parseAbi([
@@ -68,7 +70,7 @@ function App() {
 
   
   const setupZerodev = async () => {
-    if (!walletClient || !address) return;
+    if (!publicClient || !walletClient || !address) return;
     try {
       // Create a Semaphore identity
       const identitySemaphoreMessage = "Creating a new Semaphore identity";
@@ -128,14 +130,21 @@ function App() {
 
       const accountAddress = kernelClient.account.address;
       console.log("My account:", accountAddress);
-      
-      // Send a UserOp
+
+      if (!isAddress(toAddress)) {
+        console.log("Invalid address")
+        return;
+      }
+
+      const usdcOp = await prepareUSDCOp(kernelClient, publicClient, toAddress);
+
+      if (!usdcOp) {
+        console.log("no USDC in this account")
+        return;
+      }
+
       const userOpHash = await kernelClient.sendUserOperation({
-        callData: await kernelClient.account.encodeCalls([{
-          to: zeroAddress,
-          value: BigInt(0),
-          data: "0x",
-        }]),
+        callData: usdcOp,
       });
 
       console.log("UserOp hash:", userOpHash)
@@ -222,6 +231,8 @@ function App() {
     }
   };
 
+  const [toAddress, setToAddress] = useState("");
+
   return (
     <div>
       <ConnectButton />
@@ -229,11 +240,12 @@ function App() {
         <Button onClick={handleDeposit}>
           Deposit
         </Button>
+        <Input placeholder="To address" value={toAddress} onChange={(e) => setToAddress(e.target.value)} />
         <Button 
           onClick={setupZerodev}
           variant="outline"
         >
-          Setup ZeroDev
+          Send USDC to {toAddress} using ZeroDev
         </Button>
       </div>
     </div>
