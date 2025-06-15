@@ -30,6 +30,11 @@ import { Identity } from "@semaphore-protocol/identity"
 import { prepareUSDCOp } from '@/lib/usdc';
 import { Input } from '@/components/ui/input';
 import { useState } from 'react';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
+
+
+import { extractViewingPrivateKeyNode, generateEphemeralPrivateKey, generateFluidkeyMessage, generateKeysFromSignature, generateStealthAddresses, generateStealthPrivateKey } from "@fluidkey/stealth-account-kit"
+import { privateKeyToAccount } from 'viem/accounts';
 
 
 const CONTRACT_ABI = parseAbi([
@@ -59,6 +64,7 @@ function App() {
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
   const { address } = useAccount();
+
   const zerodevPublicClient = createPublicClient({
     transport: http(ZERODEV_RPC),
     chain: sepolia,
@@ -67,6 +73,8 @@ function App() {
     transport: http(ZERODEV_RPC),
     chain: sepolia,
   })
+
+  const [stealthAddresses, setStealthAddresses] = useState<string[]>([]);
 
   
   const setupZerodev = async () => {
@@ -169,6 +177,58 @@ function App() {
     }
   };
 
+  const handleFetchStealthAddresses = async () => {
+    if (!walletClient || !publicClient) {
+      throw new Error("Wallet not connected");
+    }
+
+    const { message } = await generateFluidkeyMessage({ pin: "0000", address: walletClient.account.address })
+
+    const signature = await walletClient.signMessage({ message })
+
+    console.log("signature", signature)
+
+    const { spendingPrivateKey, viewingPrivateKey } = generateKeysFromSignature(signature)
+
+    const derivedBIP32Node = extractViewingPrivateKeyNode(
+      viewingPrivateKey,
+      0
+    );
+
+    const spendingAccount = privateKeyToAccount(
+      spendingPrivateKey
+    );
+    const spendingPublicKey = spendingAccount.publicKey;
+
+
+    const startNonce = 0;
+    const endNonce = 10;
+
+    const _stealthAddresses: string[] = [];
+
+    for (let i = startNonce; i < endNonce; i++) {
+      const { ephemeralPrivateKey } = generateEphemeralPrivateKey({
+        viewingPrivateKeyNode: derivedBIP32Node,
+        nonce: BigInt(i),
+        chainId: 11155111, // sepolia
+      });
+
+      const { stealthAddresses } = generateStealthAddresses({
+        spendingPublicKeys: [spendingPublicKey],
+        ephemeralPrivateKey: ephemeralPrivateKey,
+      });
+
+      
+
+      // const stealthPrivateKey = generateStealthPrivateKey({ ephemeralPublicKey: ephemeralPrivateKey, spendingPrivateKey})
+
+      _stealthAddresses.push(stealthAddresses[0])
+
+    }
+
+    setStealthAddresses(_stealthAddresses);
+  }
+
   const handleDeposit = async () => {
     try {
       if (!walletClient || !publicClient) {
@@ -240,6 +300,9 @@ function App() {
         <Button onClick={handleDeposit}>
           Deposit
         </Button>
+        <Button onClick={handleFetchStealthAddresses}>
+          Fetch Stealth Addresses
+        </Button>
         <Input placeholder="To address" value={toAddress} onChange={(e) => setToAddress(e.target.value)} />
         <Button 
           onClick={setupZerodev}
@@ -247,6 +310,21 @@ function App() {
         >
           Send USDC to {toAddress} using ZeroDev
         </Button>
+
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Stealth Address</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {stealthAddresses.map((address) => (
+              <TableRow key={address}>
+                <TableCell>{address}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     </div>
   )
