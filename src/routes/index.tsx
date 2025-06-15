@@ -107,184 +107,6 @@ function App() {
   const [stealthAddresses, setStealthAddresses] = useState<`0x${string}`[]>([]);
   const [stealthPrivateKeys, setStealthPrivateKeys] = useState<string[]>([]);
   
-
-  // Generating paymaster data
-  async function generatePaymasterData(
-      id: Identity,
-      group: Group,
-      message: bigint,
-      groupId: number
-  ) {
-      const proof = await generateProof(id, group, message, groupId);
-      await verifyProof(proof);
-      
-      const paymasterData = encodeAbiParameters(
-        parseAbiParameters(
-          "(uint256, (uint256, uint256, uint256, uint256, uint256, uint256[8]))"
-        ),
-        [
-          [
-          BigInt(groupId), [
-            BigInt(proof.merkleTreeDepth),
-            BigInt(proof.merkleTreeRoot),
-            BigInt(proof.nullifier),
-            BigInt(proof.message),
-            BigInt(proof.scope),
-            proof.points.map(p => BigInt(p)) as any
-          ]]
-        ]
-      );
-      return paymasterData;
-  };
-  const setupZerodev = async () => {
-    if (!publicClient || !walletClient || !address) return;
-    try {
-      // Create a Semaphore identity
-      const identitySemaphoreMessage = "Creating a new Semaphore identity!!";
-      const signature = await walletClient.signMessage({ message:identitySemaphoreMessage });
-      const identitySemaphore = new Identity(signature);
-      console.log("Identity commitment: ", identitySemaphore.commitment);
-
-
-      // Check if the user is already in the group
-      let isMember: boolean;
-      isMember = await publicClient.readContract({
-        address: SEMAPHORE_ADMIN_ADDRESS,
-        abi: SEMAPHORE_ADMIN_ABI,
-        functionName: "isMember",
-        args: [identitySemaphore.commitment],
-      }) as boolean;
-      console.log("isMember", isMember);
-
-      if (!isMember) {
-        const joinGroupTx = await walletClient.writeContract({
-          address: SEMAPHORE_ADMIN_ADDRESS,
-          abi: SEMAPHORE_ADMIN_ABI,
-          functionName: "joinGroup",
-          args: [BigInt(0), SEMAPHORE_PAYMASTER_ADDRESS, identitySemaphore.commitment],
-          value: SEMAPHORE_DEPOSIT_AMOUNT,
-        });
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        console.log("joinGroupTx", joinGroupTx);
-      }
-
-      // Construct a validator
-      const ecdsaValidator = await signerToEcdsaValidator(zerodevPublicClient, {
-        signer: walletClient, // Pass the wallet client as the signer
-        entryPoint,
-        kernelVersion
-      });
-      
-      // Construct a Kernel account
-      const account = await createKernelAccount(zerodevPublicClient, {
-        plugins: {
-          sudo: ecdsaValidator,
-        },
-        entryPoint,
-        kernelVersion
-      });
-
-      // Get the smart account address
-      const smartAccountAddress = await getKernelAddressFromECDSA({
-        publicClient: zerodevPublicClient,
-        eoaAddress: address,
-        index: BigInt(0), 
-        entryPoint, 
-        kernelVersion, 
-      });
-      console.log("smartAccountAddress", smartAccountAddress);
-
-      
-      const memberAddedEvents = await publicClientWithBlock.getLogs({
-        address: SEMAPHORE_PAYMASTER_ADDRESS,
-        event: {
-          type: 'event',
-          name: 'MemberAdded',
-          inputs: [
-            { name: 'groupId', type: 'uint256', indexed: true },
-            { name: 'index', type: 'uint256', indexed: false },
-            { name: 'identityCommitment', type: 'uint256', indexed: false },
-            { name: 'merkleTreeRoot', type: 'uint256', indexed: false }
-          ]
-        },
-        args: {
-          groupId: BigInt(SEMAPHORE_GROUP_ID)
-        },
-        fromBlock: BigInt(8553079),
-        toBlock: 'latest'
-      });
-      
-      console.log("[useSemaphore] Found", memberAddedEvents.length, "member events");
-      
-      const existingMembers = memberAddedEvents.map(event => ({
-        index: Number(event.args.index),
-        commitment: (event.args.identityCommitment as bigint).toString()
-      }));
-
-      const semaphoreGroup = new Group(existingMembers.map(member => BigInt(member.commitment)))
-
-      // const semaphoreGroup = new Group(members)
-      const paymasterData = await generatePaymasterData(identitySemaphore, semaphoreGroup, BigInt(smartAccountAddress), SEMAPHORE_GROUP_ID)
-      console.log("paymasterData", paymasterData);
-
-      // Construct a Kernel account client
-      const kernelClient = createKernelAccountClient({
-        account,
-        chain: sepolia,
-        bundlerTransport: http(ZERODEV_RPC),
-        // Required - the public client
-        client: publicClient,
-        paymaster: {
-            getPaymasterData(userOperation) {
-                return zerodevPaymaster.sponsorUserOperation({userOperation})
-            }
-        },
-      });
-
-      const accountAddress = kernelClient.account.address;
-      console.log("My account:", accountAddress);
-      
-      if (!isAddress(toAddress)) {
-        console.log("Invalid address")
-        return;
-      }
-
-      const usdcOp = await prepareUSDCOp(kernelClient, publicClient, toAddress);
-
-      if (!usdcOp) {
-        console.log("no USDC in this account")
-        return;
-      }
-      const userOpHash = await kernelClient.sendUserOperation({
-        callData: usdcOp,
-        paymaster: SEMAPHORE_PAYMASTER_ADDRESS,
-        paymasterVerificationGasLimit: BigInt(2000000),
-        paymasterPostOpGasLimit: BigInt(2000000),
-        paymasterData,
-      });
-
-      console.log("UserOp hash:", userOpHash)
-      console.log("Waiting for UserOp to complete...")
-    
-      const userOp = await kernelClient.waitForUserOperationReceipt({
-        hash: userOpHash,
-        timeout: 1000 * 15,
-      })
-    
-      console.log("UserOp completed: https://eth-sepolia.blockscout.com/op/" + userOpHash)
-
-    return kernelClient;
-
-    } catch (error) {
-      console.error("Error in setupZerodev:", error);
-      if (error instanceof Error) {
-        console.error("Error message:", error.message);
-        console.error("Error stack:", error.stack);
-      }
-      throw error;
-    }
-  };
-
   const handleFetchStealthAddresses = async () => {
     if (!walletClient || !publicClient) {
       throw new Error("Wallet not connected");
@@ -338,66 +160,48 @@ function App() {
   }
 
   const handleDeposit = async () => {
-    try {
-      if (!walletClient || !publicClient) {
-        throw new Error("Wallet not connected");
-      }
 
-      console.log("\n📦 Creating deposit commitment...");
-      const existingNullifier = BigInt(Math.floor(Math.random() * 10000000000000000)) as Secret;
-      const existingSecret = BigInt(Math.floor(Math.random() * 10000000000000000)) as Secret;
-      console.log("existingNullifier", existingNullifier);
-      console.log("existingSecret", existingSecret);
-      const precommitment = {
-        hash: hashPrecommitment(existingNullifier, existingSecret),
-        nullifier: existingNullifier,
-        secret: existingSecret,
-      };
-      console.log("precommitment hash:", precommitment.hash.toString());
-
-      // 2. Make deposit
-      console.log("\n💸 Making deposit...");
-      
-      
-      // Log the transaction parameters
-      console.log('Transaction parameters:', {
-        amount: DEPOSIT_AMOUNT.toString(),
-        precommitmentHash: precommitment.hash.toString(),
-        value: DEPOSIT_AMOUNT.toString()
-      });
-
-      // Make the deposit
-      const depositTx = await walletClient.writeContract({
-        address: ENTRYPOINT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: "deposit",
-        args: [precommitment.hash],
-        value: DEPOSIT_AMOUNT,
-      });
-      
-      console.log("⏳ Waiting for deposit transaction...");
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: depositTx });
-      console.log("receipt", receipt);
-     
-      // Get the event logs
-      const logs = receipt.logs.filter((log: { topics: string[] }) => 
-        log.topics[0] === "0xe3b53cd1a44fbf11535e145d80b8ef1ed6d57a73bf5daa7e939b6b01657d6549"
-      );
-      const decodedValues = decodeAbiParameters(parseAbiParameters('uint256, uint256, uint256, uint256'), logs[0].data);
-      console.log("_label", decodedValues[1]);
-
-      console.log("✅ Deposit successful! Transaction hash:", depositTx);
-    } catch (error: any) {
-      console.error("Error during deposit:", error);
-      // Log more details about the error
-      if (error.data) {
-        console.error("Error data:", error.data);
-      }
-      if (error.transaction) {
-        console.error("Transaction details:", error.transaction);
-      }
+    if (!walletClient) {
+      throw new Error("Wallet not connected");
     }
-  };
+
+    const idSeedMsg = "Creating a new Semaphore identity!!";
+    const signature = await walletClient.signMessage({ 
+      account: walletClient.account,
+      message: idSeedMsg 
+    });
+
+    const identity = new Identity(signature);
+    if (!walletClient || !publicClient) {
+      throw new Error("Wallet not connected");
+    }
+
+    const isMember: boolean = (await publicClient.readContract({
+      address: SEMAPHORE_ADMIN_ADDRESS,
+      abi: SEMAPHORE_ADMIN_ABI,
+      functionName: "isMember",
+      args: [identity.commitment],
+    })) as boolean;
+  
+    if (!isMember) {
+      await walletClient.writeContract({
+        address: SEMAPHORE_ADMIN_ADDRESS,
+        abi: SEMAPHORE_ADMIN_ABI,
+        functionName: "joinGroup",
+        args: [
+          BigInt(SEMAPHORE_GROUP_ID),
+          SEMAPHORE_PAYMASTER_ADDRESS,
+          identity.commitment,
+        ],
+        value: SEMAPHORE_DEPOSIT_AMOUNT,
+        chain: sepolia,
+        account: walletClient.account,
+      });
+      // give the tx a block or two – easiest is just a tiny delay
+      await new Promise((r) => setTimeout(r, 2_000));
+    }
+    
+  }
 
   const [toAddress, setToAddress] = useState("");
 

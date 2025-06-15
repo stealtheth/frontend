@@ -1,4 +1,3 @@
-// src/hooks/useSendUSDC.ts
 import { useCallback, useState } from "react";
 import {
   createWalletClient,
@@ -18,14 +17,18 @@ import {
 import {
   createKernelAccount,
   createKernelAccountClient,
-  createZeroDevPaymasterClient,
   type KernelAccountClient,
 } from "@zerodev/sdk";
 
 import { prepareUSDCOp, USDC_SEPOLIA } from "@/lib/usdc";
 import { privateKeyToAccount } from "viem/accounts";
 
-// RPC that ZeroDev gave you for Sepolia
+import {
+  buildSemaphorePaymasterData,
+} from "@/lib/semaphorePaymaster";
+import { useWalletClient } from "wagmi";
+
+/* RPC that ZeroDev gave you for Sepolia */
 const ZERODEV_RPC =
   "https://rpc.zerodev.app/api/v3/492f3962-eff6-49ea-bddb-916d21cbf7fc/chain/11155111";
 
@@ -44,15 +47,17 @@ interface UseSendUSDCResult {
  *
  * The function:
  *  1. Spins up a viem wallet & public client from the given private key.
- *  2. Builds a ZeroDev Kernel account + client (bundler + paymaster).
+ *  2. Builds a ZeroDev Kernel account + client (bundler).
  *  3. Uses `prepareUSDCOp` to create the callData that transfers all USDC
  *     held by the Kernel account to `toAddress`.
- *  4. Sends the UserOperation and waits for inclusion.
+ *  4. Generates Semaphore paymaster data & sends the UserOperation.
  */
 export function useSendUSDC(): UseSendUSDCResult {
   const [isSending, setIsSending] = useState(false);
   const [lastHash, setLastHash] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
+
+  const {data: mainWalletClient} = useWalletClient()
 
   const sendUSDC = useCallback(
     async (privateKey: `0x${string}`, toAddress: Address) => {
@@ -74,13 +79,9 @@ export function useSendUSDC(): UseSendUSDCResult {
         });
 
         /* ------------------------------------------------------------------
-         * 2. Build the Kernel account + client on ZeroDev
+         * 2. Build the Kernel account + client (no paymaster here!)
          * ------------------------------------------------------------------ */
         const zerodevPublicClient = createPublicClient({
-          chain: sepolia,
-          transport: http(ZERODEV_RPC),
-        });
-        const zerodevPaymaster = createZeroDevPaymasterClient({
           chain: sepolia,
           transport: http(ZERODEV_RPC),
         });
@@ -101,12 +102,6 @@ export function useSendUSDC(): UseSendUSDCResult {
           chain: sepolia,
           bundlerTransport: http(ZERODEV_RPC),
           client: publicClient,
-          paymaster: {
-            async getPaymasterData(userOperation) {
-              // sponsor with ZeroDev’s paymaster
-              return zerodevPaymaster.sponsorUserOperation({ userOperation });
-            },
-          },
         });
 
         /* ------------------------------------------------------------------
@@ -125,9 +120,23 @@ export function useSendUSDC(): UseSendUSDCResult {
         }
 
         /* ------------------------------------------------------------------
-         * 4. Send the UserOperation
+         * 4. Build the Semaphore paymaster data & send the UserOp
          * ------------------------------------------------------------------ */
-        const userOpHash = await kernelClient.sendUserOperation({ callData });
+        const {
+          paymasterAddress,
+          paymasterData,
+          verificationGasLimit,
+          postOpGasLimit,
+        } = await buildSemaphorePaymasterData(mainWalletClient, publicClient);
+
+        const userOpHash = await kernelClient.sendUserOperation({
+          callData,
+          paymaster: paymasterAddress,
+          paymasterData,
+          paymasterVerificationGasLimit: verificationGasLimit,
+          paymasterPostOpGasLimit: postOpGasLimit,
+        });
+
         setLastHash(userOpHash);
 
         // optional: wait for inclusion so caller can block on success
@@ -136,8 +145,7 @@ export function useSendUSDC(): UseSendUSDCResult {
           timeout: 1_000 * 90, // 90 s timeout
         });
 
-        console.log("UserOperation sent successfully", userOpHash)
-
+        console.log("UserOperation sent successfully", userOpHash);
         return userOpHash;
       } catch (err) {
         setError(err);
@@ -146,7 +154,7 @@ export function useSendUSDC(): UseSendUSDCResult {
         setIsSending(false);
       }
     },
-    []
+    [mainWalletClient]
   );
 
   return { sendUSDC, isSending, lastHash, error };
