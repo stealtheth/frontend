@@ -45,7 +45,7 @@ const CONTRACT_ABI = parseAbi([
 ]);
 const SEMAPHORE_ADMIN_ABI = parseAbi([
   "function joinGroup(uint256 groupId, address semaphore, uint256 identityCommitment) external payable",
-  "function isMember(uint256 commitment) external",
+  "function isMember(uint256 commitment) external view returns (bool)",
 ]);
 
 const ENTRYPOINT_ADDRESS = "0x0e95a2ac10745cad4fdf00394cb6419ed24374f7";
@@ -122,7 +122,7 @@ function App() {
     if (!publicClient || !walletClient || !address) return;
     try {
       // Create a Semaphore identity
-      const identitySemaphoreMessage = "Creating a new Semaphore identity";
+      const identitySemaphoreMessage = "Creating a new Semaphore identity!!";
       const signature = await walletClient.signMessage({ message:identitySemaphoreMessage });
       const identitySemaphore = new Identity(signature);
       console.log("Identity commitment: ", identitySemaphore.commitment);
@@ -138,16 +138,17 @@ function App() {
       }) as boolean;
       console.log("isMember", isMember);
 
-      // if (!isMember) {
-      //   const joinGroupTx = await walletClient.writeContract({
-      //     address: SEMAPHORE_ADMIN_ADDRESS,
-      //     abi: SEMAPHORE_ADMIN_ABI,
-      //     functionName: "joinGroup",
-      //     args: [BigInt(0), SEMAPHORE_PAYMASTER_ADDRESS, identitySemaphore.commitment],
-      //     value: SEMAPHORE_DEPOSIT_AMOUNT,
-      //   });
-      //   console.log("joinGroupTx", joinGroupTx);
-      // }
+      if (!isMember) {
+        const joinGroupTx = await walletClient.writeContract({
+          address: SEMAPHORE_ADMIN_ADDRESS,
+          abi: SEMAPHORE_ADMIN_ABI,
+          functionName: "joinGroup",
+          args: [BigInt(0), SEMAPHORE_PAYMASTER_ADDRESS, identitySemaphore.commitment],
+          value: SEMAPHORE_DEPOSIT_AMOUNT,
+        });
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log("joinGroupTx", joinGroupTx);
+      }
 
       // Construct a validator
       const ecdsaValidator = await signerToEcdsaValidator(zerodevPublicClient, {
