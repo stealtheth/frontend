@@ -20,8 +20,12 @@ import {
 } from "@0xbow/privacy-pools-core-sdk";
 
 import { KERNEL_V3_1, getEntryPoint } from "@zerodev/sdk/constants"
-import { signerToEcdsaValidator } from "@zerodev/ecdsa-validator"
-import { createKernelAccount, createKernelAccountClient, createZeroDevPaymasterClient } from "@zerodev/sdk"
+import { signerToEcdsaValidator, getKernelAddressFromECDSA } from "@zerodev/ecdsa-validator"
+import { 
+  createKernelAccount, 
+  createKernelAccountClient, 
+  createZeroDevPaymasterClient
+} from "@zerodev/sdk"
 
 
 const CONTRACT_ABI = parseAbi([
@@ -61,7 +65,7 @@ function App() {
         entryPoint,
         kernelVersion
       });
-
+      
       // Construct a Kernel account
       const account = await createKernelAccount(zerodevPublicClient, {
         plugins: {
@@ -70,6 +74,15 @@ function App() {
         entryPoint,
         kernelVersion
       });
+
+      const smartAccountAddress = await getKernelAddressFromECDSA({
+        publicClient: zerodevPublicClient,
+        eoaAddress: address,
+        index: BigInt(0), 
+        entryPoint, 
+        kernelVersion, 
+      });
+      console.log("smartAccountAddress", smartAccountAddress);
 
       // Construct a Kernel account client
       const kernelClient = createKernelAccountClient({
@@ -105,7 +118,7 @@ function App() {
         timeout: 1000 * 15,
       })
     
-      console.log("UserOp completed: https://base-sepolia.blockscout.com/op/" + userOpHash)
+      console.log("UserOp completed: https://eth-sepolia.blockscout.com/op/" + userOpHash)
       
       return kernelClient;
 
