@@ -28,14 +28,13 @@ import {
 } from "@zerodev/sdk"
 
 import { Identity } from "@semaphore-protocol/identity";
-import { SemaphoreSubgraph } from "@semaphore-protocol/data";
+import { SemaphoreEthers, SemaphoreSubgraph } from "@semaphore-protocol/data";
 import { Group } from "@semaphore-protocol/group";
-import { generateProof } from "@semaphore-protocol/proof";
+import { generateProof, verifyProof } from "@semaphore-protocol/proof";
 import { prepareUSDCOp } from '@/lib/usdc';
 import { Input } from '@/components/ui/input';
 import { useState } from 'react';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-
 
 import { extractViewingPrivateKeyNode, generateEphemeralPrivateKey, generateFluidkeyMessage, generateKeysFromSignature, generateStealthAddresses, generateStealthPrivateKey } from "@fluidkey/stealth-account-kit"
 import { privateKeyToAccount } from 'viem/accounts';
@@ -45,19 +44,20 @@ const CONTRACT_ABI = parseAbi([
   "function deposit(uint256 precommitmentHash) external payable",
 ]);
 const SEMAPHORE_ADMIN_ABI = parseAbi([
-  "function joinGroup(uint256 groupId, address semaphore,uint256 identityCommitment) external payable",
+  "function joinGroup(uint256 groupId, address semaphore, uint256 identityCommitment) external payable",
+  "function isMember(uint256 commitment) external",
 ]);
 
 const ENTRYPOINT_ADDRESS = "0x0e95a2ac10745cad4fdf00394cb6419ed24374f7";
 const DEPOSIT_AMOUNT = parseEther("0.001"); // 0.001 ETH
 
 const ZERODEV_RPC = 'https://rpc.zerodev.app/api/v3/492f3962-eff6-49ea-bddb-916d21cbf7fc/chain/11155111';
+const SEPOLIA_RPC = 'https://eth-sepolia.g.alchemy.com/v2/alvfYVoqtfz_sWLhV9o9AN0Z9HQyyb3O';
 const entryPoint = getEntryPoint("0.7")
 const kernelVersion = KERNEL_V3_1
-
 const SEMAPHORE_GROUP_ID = 0;
-const SEMAPHORE_ADMIN_ADDRESS = "0x13e7f88382041201F23d58BaE18eA9d2248f4e3b";
-const SEMAPHORE_PAYMASTER_ADDRESS = "0x67D4dd5251D7797590A4C99d55320Eabd3C8611a";
+const SEMAPHORE_ADMIN_ADDRESS = "0x4Cd39b36ae99C2c4DAE1f6af989feC0E34bf67f2";
+const SEMAPHORE_PAYMASTER_ADDRESS = "0xDA79AD2A2afBE758d3F015720F4841754833922c";
 const SEMAPHORE_DEPOSIT_AMOUNT = parseEther("0.001"); // 0.001 ETH
 
 export const Route = createFileRoute('/')({
@@ -67,10 +67,16 @@ export const Route = createFileRoute('/')({
 
 function App() {
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
   const { address } = useAccount();
 
-
+  const publicClient = createPublicClient({
+    transport: http(SEPOLIA_RPC),
+    chain: sepolia,
+  });
+  const publicClientWithBlock = createPublicClient({
+    transport: http('https://rpc.ankr.com/eth_sepolia/23dd4dc19ab6c2f080ea516ca4d834a85cd7e1956128fad2dff9d34db759e52f'),
+    chain: sepolia,
+  });
   // Zerodev
   const zerodevPublicClient = createPublicClient({
     transport: http(ZERODEV_RPC),
@@ -79,7 +85,7 @@ function App() {
   const zerodevPaymaster = createZeroDevPaymasterClient({
     transport: http(ZERODEV_RPC),
     chain: sepolia,
-  })
+  });
 
   const [stealthAddresses, setStealthAddresses] = useState<string[]>([]);
   
@@ -92,18 +98,26 @@ function App() {
       groupId: number
   ) {
       const proof = await generateProof(id, group, message, groupId);
+      await verifyProof(proof);
+      
       const paymasterData = encodeAbiParameters(
         parseAbiParameters(
-          "tuple(uint256 groupId, tuple(uint256 merkleTreeDepth, uint256 merkleTreeRoot, uint256 nullifier, uint256 message, uint256 scope, uint256[8] points) proof)"
+          "(uint256, (uint256, uint256, uint256, uint256, uint256, uint256[8]))"
         ),
-        // @ts-ignore
         [
-          [groupId, proof]
+          [
+          BigInt(groupId), [
+            BigInt(proof.merkleTreeDepth),
+            BigInt(proof.merkleTreeRoot),
+            BigInt(proof.nullifier),
+            BigInt(proof.message),
+            BigInt(proof.scope),
+            proof.points.map(p => BigInt(p)) as any
+          ]]
         ]
       );
       return paymasterData;
   };
-  
   const setupZerodev = async () => {
     if (!publicClient || !walletClient || !address) return;
     try {
@@ -113,15 +127,27 @@ function App() {
       const identitySemaphore = new Identity(signature);
       console.log("Identity commitment: ", identitySemaphore.commitment);
 
-      // Join to the Semaphore group
-      const joinGroupTx =await walletClient.writeContract({
+
+      // Check if the user is already in the group
+      let isMember: boolean;
+      isMember = await publicClient.readContract({
         address: SEMAPHORE_ADMIN_ADDRESS,
         abi: SEMAPHORE_ADMIN_ABI,
-        functionName: "joinGroup",
-        args: [BigInt(0), SEMAPHORE_PAYMASTER_ADDRESS, identitySemaphore.commitment],
-        value: SEMAPHORE_DEPOSIT_AMOUNT,
-      });
-      console.log("joinGroupTx", joinGroupTx);
+        functionName: "isMember",
+        args: [identitySemaphore.commitment],
+      }) as boolean;
+      console.log("isMember", isMember);
+
+      // if (!isMember) {
+      //   const joinGroupTx = await walletClient.writeContract({
+      //     address: SEMAPHORE_ADMIN_ADDRESS,
+      //     abi: SEMAPHORE_ADMIN_ABI,
+      //     functionName: "joinGroup",
+      //     args: [BigInt(0), SEMAPHORE_PAYMASTER_ADDRESS, identitySemaphore.commitment],
+      //     value: SEMAPHORE_DEPOSIT_AMOUNT,
+      //   });
+      //   console.log("joinGroupTx", joinGroupTx);
+      // }
 
       // Construct a validator
       const ecdsaValidator = await signerToEcdsaValidator(zerodevPublicClient, {
@@ -149,11 +175,38 @@ function App() {
       });
       console.log("smartAccountAddress", smartAccountAddress);
 
-      // Generate paymaster data
-      const semaphoreSubgraph = new SemaphoreSubgraph("sepolia")
-      const { members } = await semaphoreSubgraph.getGroup(String(SEMAPHORE_GROUP_ID), { members: true })
-      const semaphoreGroup = new Group(members)
+      
+      const memberAddedEvents = await publicClientWithBlock.getLogs({
+        address: SEMAPHORE_PAYMASTER_ADDRESS,
+        event: {
+          type: 'event',
+          name: 'MemberAdded',
+          inputs: [
+            { name: 'groupId', type: 'uint256', indexed: true },
+            { name: 'index', type: 'uint256', indexed: false },
+            { name: 'identityCommitment', type: 'uint256', indexed: false },
+            { name: 'merkleTreeRoot', type: 'uint256', indexed: false }
+          ]
+        },
+        args: {
+          groupId: BigInt(SEMAPHORE_GROUP_ID)
+        },
+        fromBlock: BigInt(8553079),
+        toBlock: 'latest'
+      });
+      
+      console.log("[useSemaphore] Found", memberAddedEvents.length, "member events");
+      
+      const existingMembers = memberAddedEvents.map(event => ({
+        index: Number(event.args.index),
+        commitment: (event.args.identityCommitment as bigint).toString()
+      }));
+
+      const semaphoreGroup = new Group(existingMembers.map(member => BigInt(member.commitment)))
+
+      // const semaphoreGroup = new Group(members)
       const paymasterData = await generatePaymasterData(identitySemaphore, semaphoreGroup, BigInt(smartAccountAddress), SEMAPHORE_GROUP_ID)
+      console.log("paymasterData", paymasterData);
 
       // Construct a Kernel account client
       const kernelClient = createKernelAccountClient({
@@ -171,7 +224,7 @@ function App() {
 
       const accountAddress = kernelClient.account.address;
       console.log("My account:", accountAddress);
-
+      
       if (!isAddress(toAddress)) {
         console.log("Invalid address")
         return;
@@ -183,22 +236,25 @@ function App() {
         console.log("no USDC in this account")
         return;
       }
-
       const userOpHash = await kernelClient.sendUserOperation({
         callData: usdcOp,
+        paymaster: SEMAPHORE_PAYMASTER_ADDRESS,
+        paymasterVerificationGasLimit: BigInt(2000000),
+        paymasterPostOpGasLimit: BigInt(2000000),
+        paymasterData,
       });
 
       console.log("UserOp hash:", userOpHash)
       console.log("Waiting for UserOp to complete...")
     
-      await kernelClient.waitForUserOperationReceipt({
+      const userOp = await kernelClient.waitForUserOperationReceipt({
         hash: userOpHash,
         timeout: 1000 * 15,
       })
     
       console.log("UserOp completed: https://eth-sepolia.blockscout.com/op/" + userOpHash)
-      
-      return kernelClient;
+
+    return kernelClient;
 
     } catch (error) {
       console.error("Error in setupZerodev:", error);
