@@ -9,6 +9,7 @@ import './styles.css'
 import '@rainbow-me/rainbowkit/styles.css'
 import reportWebVitals from './reportWebVitals.ts'
 import { Providers } from './providers.tsx'
+import { Toaster } from "@/components/ui/sonner"
 
 // Create a new router instance
 const router = createRouter({
@@ -35,6 +36,7 @@ if (rootElement && !rootElement.innerHTML) {
     <StrictMode>
       <Providers>
         <RouterProvider router={router} />
+        <Toaster />
       </Providers>
     </StrictMode>,
   )
