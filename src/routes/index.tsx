@@ -36,7 +36,7 @@ import { extractViewingPrivateKeyNode, generateEphemeralPrivateKey, generateFlui
 import { privateKeyToAccount } from 'viem/accounts';
 import { getPrivateKeyForSigner } from '@/lib/stealth';
 import { StealthTable } from '@/components/StealthTable';
-
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 const CONTRACT_ABI = parseAbi([
   "function deposit(uint256 precommitmentHash) external payable",
@@ -60,6 +60,22 @@ export const Route = createFileRoute('/')({
   component: App,
 })
 
+function Header() {
+  return (
+    <header className="flex items-center justify-between p-4 border-b">
+      <h1 className="text-2xl font-bold">StealthETH</h1>
+      <ConnectButton />
+    </header>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="text-center p-4 border-t">
+      <p>Built for the ETHGlobal Brussels Hackathon</p>
+    </footer>
+  );
+}
 
 function App() {
   const { data: walletClient } = useWalletClient();
@@ -75,7 +91,7 @@ function App() {
     chain: sepolia,
   })
 
-  const [stealthAddresses, setStealthAddresses] = useState<string[]>([]);
+  const [stealthAddresses, setStealthAddresses] = useState<`0x${string}`[]>([]);
   const [stealthPrivateKeys, setStealthPrivateKeys] = useState<string[]>([]);
   
   const setupZerodev = async () => {
@@ -205,7 +221,7 @@ function App() {
     const startNonce = 0;
     const endNonce = 10;
 
-    const _stealthAddresses: string[] = [];
+    const _stealthAddresses: `0x${string}`[] = [];
     const _stealthPrivateKeys: string[] = [];
 
     for (let i = startNonce; i < endNonce; i++) {
@@ -295,25 +311,68 @@ function App() {
   const [toAddress, setToAddress] = useState("");
 
   return (
-    <div>
-      <ConnectButton />
-      <div>
-        <Button onClick={handleDeposit}>
-          Deposit
-        </Button>
-        <Button onClick={handleFetchStealthAddresses}>
-          Fetch Stealth Addresses
-        </Button>
-        <Input placeholder="To address" value={toAddress} onChange={(e) => setToAddress(e.target.value)} />
-        <Button 
-          onClick={setupZerodev}
-          variant="outline"
-        >
-          Send USDC to {toAddress} using ZeroDev
-        </Button>
+    <div className="flex flex-col min-h-screen bg-background text-foreground">
+      <Header />
+      <main className="flex-1 p-4 md:p-8">
+        <div className="container mx-auto">
+          <h2 className="text-3xl font-bold mb-8 text-center">Anonymous USDC Payments</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>1. Deposit ETH</CardTitle>
+                <CardDescription>Deposit 0.001 ETH to a privacy pool.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={handleDeposit} className="w-full">
+                  Deposit
+                </Button>
+              </CardContent>
+            </Card>
 
-        <StealthTable stealthAddresses={stealthAddresses} stealthPrivateKeys={stealthPrivateKeys} />
-      </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>2. Generate Stealth Addresses</CardTitle>
+                <CardDescription>Create new stealth addresses for receiving funds privately.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={handleFetchStealthAddresses} className="w-full">
+                  Fetch Stealth Addresses
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>3. Send USDC Anonymously</CardTitle>
+                <CardDescription>Send USDC to any address using a ZeroDev smart account.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Input placeholder="To address" value={toAddress} onChange={(e) => setToAddress(e.target.value)} className="mb-4" />
+                <Button 
+                  onClick={setupZerodev}
+                  variant="outline"
+                  className="w-full"
+                  disabled={!toAddress || !isAddress(toAddress)}
+                >
+                  Send USDC to {toAddress}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {stealthAddresses.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-2xl font-bold mb-4 text-center">Your Stealth Accounts</h3>
+              <Card>
+                <CardContent className="p-0">
+                  <StealthTable stealthAddresses={stealthAddresses} stealthPrivateKeys={stealthPrivateKeys} />
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+      </main>
+      <Footer />
     </div>
   )
 }
