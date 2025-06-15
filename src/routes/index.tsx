@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { 
   parseEther, 
   parseAbi, 
+  encodeAbiParameters,
   decodeAbiParameters, 
   parseAbiParameters,
   createPublicClient,
@@ -26,7 +27,10 @@ import {
   createZeroDevPaymasterClient
 } from "@zerodev/sdk"
 
-import { Identity } from "@semaphore-protocol/identity"
+import { Identity } from "@semaphore-protocol/identity";
+import { SemaphoreSubgraph } from "@semaphore-protocol/data";
+import { Group } from "@semaphore-protocol/group";
+import { generateProof } from "@semaphore-protocol/proof";
 import { prepareUSDCOp } from '@/lib/usdc';
 import { Input } from '@/components/ui/input';
 import { useState } from 'react';
@@ -51,6 +55,7 @@ const ZERODEV_RPC = 'https://rpc.zerodev.app/api/v3/492f3962-eff6-49ea-bddb-916d
 const entryPoint = getEntryPoint("0.7")
 const kernelVersion = KERNEL_V3_1
 
+const SEMAPHORE_GROUP_ID = 0;
 const SEMAPHORE_ADMIN_ADDRESS = "0x13e7f88382041201F23d58BaE18eA9d2248f4e3b";
 const SEMAPHORE_PAYMASTER_ADDRESS = "0x67D4dd5251D7797590A4C99d55320Eabd3C8611a";
 const SEMAPHORE_DEPOSIT_AMOUNT = parseEther("0.001"); // 0.001 ETH
@@ -65,6 +70,8 @@ function App() {
   const publicClient = usePublicClient();
   const { address } = useAccount();
 
+
+  // Zerodev
   const zerodevPublicClient = createPublicClient({
     transport: http(ZERODEV_RPC),
     chain: sepolia,
@@ -75,7 +82,27 @@ function App() {
   })
 
   const [stealthAddresses, setStealthAddresses] = useState<string[]>([]);
+  
 
+  // Generating paymaster data
+  async function generatePaymasterData(
+      id: Identity,
+      group: Group,
+      message: bigint,
+      groupId: number
+  ) {
+      const proof = await generateProof(id, group, message, groupId);
+      const paymasterData = encodeAbiParameters(
+        parseAbiParameters(
+          "tuple(uint256 groupId, tuple(uint256 merkleTreeDepth, uint256 merkleTreeRoot, uint256 nullifier, uint256 message, uint256 scope, uint256[8] points) proof)"
+        ),
+        // @ts-ignore
+        [
+          [groupId, proof]
+        ]
+      );
+      return paymasterData;
+  };
   
   const setupZerodev = async () => {
     if (!publicClient || !walletClient || !address) return;
@@ -83,15 +110,15 @@ function App() {
       // Create a Semaphore identity
       const identitySemaphoreMessage = "Creating a new Semaphore identity";
       const signature = await walletClient.signMessage({ message:identitySemaphoreMessage });
-      const { privateKey, publicKey, commitment } = new Identity(signature);
-      console.log("Identity commitment: ", commitment);
+      const identitySemaphore = new Identity(signature);
+      console.log("Identity commitment: ", identitySemaphore.commitment);
 
       // Join to the Semaphore group
       const joinGroupTx =await walletClient.writeContract({
         address: SEMAPHORE_ADMIN_ADDRESS,
         abi: SEMAPHORE_ADMIN_ABI,
         functionName: "joinGroup",
-        args: [BigInt(0), SEMAPHORE_PAYMASTER_ADDRESS, commitment],
+        args: [BigInt(0), SEMAPHORE_PAYMASTER_ADDRESS, identitySemaphore.commitment],
         value: SEMAPHORE_DEPOSIT_AMOUNT,
       });
       console.log("joinGroupTx", joinGroupTx);
@@ -121,6 +148,12 @@ function App() {
         kernelVersion, 
       });
       console.log("smartAccountAddress", smartAccountAddress);
+
+      // Generate paymaster data
+      const semaphoreSubgraph = new SemaphoreSubgraph("sepolia")
+      const { members } = await semaphoreSubgraph.getGroup(String(SEMAPHORE_GROUP_ID), { members: true })
+      const semaphoreGroup = new Group(members)
+      const paymasterData = await generatePaymasterData(identitySemaphore, semaphoreGroup, BigInt(smartAccountAddress), SEMAPHORE_GROUP_ID)
 
       // Construct a Kernel account client
       const kernelClient = createKernelAccountClient({
