@@ -1,15 +1,25 @@
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { Copy } from 'lucide-react';
+// StealthTable.tsx
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+} from '@/components/ui/table';
 import { useKernelAddresses } from '@/hooks/useKernelAddresses';
+import { StealthRow } from './StealthRow';
 
 interface StealthTableProps {
-  stealthAddresses: string[];
+  stealthAddresses: `0x${string}`[];
   stealthPrivateKeys: string[];
 }
 
-export function StealthTable({ stealthAddresses, stealthPrivateKeys }: StealthTableProps) {
+export function StealthTable({
+  stealthAddresses,
+  stealthPrivateKeys,
+}: StealthTableProps) {
+  const kernelAddresses = useKernelAddresses(stealthAddresses);
 
-  const kernelAddresses = useKernelAddresses(stealthAddresses)
   return (
     <Table>
       <TableHeader>
@@ -17,23 +27,19 @@ export function StealthTable({ stealthAddresses, stealthPrivateKeys }: StealthTa
           <TableHead>Kernel Address</TableHead>
           <TableHead>Stealth Address</TableHead>
           <TableHead>Stealth Private Key</TableHead>
+          <TableHead>Balance</TableHead>
+          <TableHead>Actions</TableHead>
         </TableRow>
       </TableHeader>
+
       <TableBody>
-        {stealthAddresses.map((address, index) => (
-          <TableRow key={address}>
-            <TableCell>{kernelAddresses[index]}</TableCell>
-            <TableCell>{address}</TableCell>
-            <TableCell
-              className="cursor-pointer hover:bg-muted/50"
-              onClick={() => navigator.clipboard.writeText(stealthPrivateKeys[index])}
-            >
-              <div className="flex items-center gap-2">
-                {stealthPrivateKeys[index].slice(0, 6)}...{stealthPrivateKeys[index].slice(-4)}
-                <Copy className="h-4 w-4" />
-              </div>
-            </TableCell>
-          </TableRow>
+        {stealthAddresses.map((addr, i) => (
+          <StealthRow
+            key={addr}
+            kernelAddress={kernelAddresses[i]}
+            stealthAddress={addr}
+            stealthPrivateKey={stealthPrivateKeys[i]}
+          />
         ))}
       </TableBody>
     </Table>

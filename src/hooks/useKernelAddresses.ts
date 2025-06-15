@@ -1,13 +1,13 @@
 import { getKernelAddressFromECDSA } from "@zerodev/ecdsa-validator";
 import { getEntryPoint, KERNEL_V3_1 } from "@zerodev/sdk/constants";
 import { useEffect, useState } from "react";
-import type { PublicClient } from "viem";
+import type { Address, PublicClient } from "viem";
 import { usePublicClient } from "wagmi";
 
 const entryPoint = getEntryPoint("0.7");
 const kernelVersion = KERNEL_V3_1;
 
-async function getKernelAddress(stealthAddress: string, publicClient: PublicClient) {
+async function getKernelAddress(stealthAddress: string, publicClient: PublicClient): Promise<Address> {
 
     const smartAccountAddress = await getKernelAddressFromECDSA({
         publicClient,
