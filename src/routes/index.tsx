@@ -27,16 +27,26 @@ import {
   createZeroDevPaymasterClient
 } from "@zerodev/sdk"
 
+import { Identity } from "@semaphore-protocol/identity"
+
 
 const CONTRACT_ABI = parseAbi([
   "function deposit(uint256 precommitmentHash) external payable",
 ]);
+const SEMAPHORE_ADMIN_ABI = parseAbi([
+  "function joinGroup(uint256 groupId, address semaphore,uint256 identityCommitment) external payable",
+]);
+
 const ENTRYPOINT_ADDRESS = "0x0e95a2ac10745cad4fdf00394cb6419ed24374f7";
 const DEPOSIT_AMOUNT = parseEther("0.001"); // 0.001 ETH
 
-const ZERODEV_RPC = 'https://rpc.zerodev.app/api/v3/492f3962-eff6-49ea-bddb-916d21cbf7fc/chain/11155111'
+const ZERODEV_RPC = 'https://rpc.zerodev.app/api/v3/492f3962-eff6-49ea-bddb-916d21cbf7fc/chain/11155111';
 const entryPoint = getEntryPoint("0.7")
 const kernelVersion = KERNEL_V3_1
+
+const SEMAPHORE_ADMIN_ADDRESS = "0x13e7f88382041201F23d58BaE18eA9d2248f4e3b";
+const SEMAPHORE_PAYMASTER_ADDRESS = "0x67D4dd5251D7797590A4C99d55320Eabd3C8611a";
+const SEMAPHORE_DEPOSIT_AMOUNT = parseEther("0.001"); // 0.001 ETH
 
 export const Route = createFileRoute('/')({
   component: App,
@@ -55,10 +65,27 @@ function App() {
     transport: http(ZERODEV_RPC),
     chain: sepolia,
   })
+
   
   const setupZerodev = async () => {
     if (!walletClient || !address) return;
     try {
+      // Create a Semaphore identity
+      const identitySemaphoreMessage = "Creating a new Semaphore identity";
+      const signature = await walletClient.signMessage({ message:identitySemaphoreMessage });
+      const { privateKey, publicKey, commitment } = new Identity(signature);
+      console.log("Identity commitment: ", commitment);
+
+      // Join to the Semaphore group
+      const joinGroupTx =await walletClient.writeContract({
+        address: SEMAPHORE_ADMIN_ADDRESS,
+        abi: SEMAPHORE_ADMIN_ABI,
+        functionName: "joinGroup",
+        args: [BigInt(0), SEMAPHORE_PAYMASTER_ADDRESS, commitment],
+        value: SEMAPHORE_DEPOSIT_AMOUNT,
+      });
+      console.log("joinGroupTx", joinGroupTx);
+
       // Construct a validator
       const ecdsaValidator = await signerToEcdsaValidator(zerodevPublicClient, {
         signer: walletClient, // Pass the wallet client as the signer
@@ -75,6 +102,7 @@ function App() {
         kernelVersion
       });
 
+      // Get the smart account address
       const smartAccountAddress = await getKernelAddressFromECDSA({
         publicClient: zerodevPublicClient,
         eoaAddress: address,
