@@ -4,6 +4,8 @@ import { Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useBalance } from 'wagmi';
 import type { Address } from 'viem';
+import { useSendUSDC } from '@/hooks/useSendUSDC';
+import { toast } from "sonner"
 
 const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'; // Sepolia
 
@@ -11,18 +13,33 @@ interface StealthRowProps {
   kernelAddress: Address;
   stealthAddress: Address;
   stealthPrivateKey: `0x${string}`;
+  toAddress: Address;
 }
 
 export function StealthRow({
   kernelAddress,
   stealthAddress,
   stealthPrivateKey,
+  toAddress,
 }: StealthRowProps) {
+  const { sendUSDC, isSending } = useSendUSDC()
   const { data: balance } = useBalance({
     address: kernelAddress,
     chainId: 11155111,
     token: USDC_ADDRESS,
   });
+
+  const handleSend = async () => {
+    const userOpHash = await sendUSDC(stealthPrivateKey, toAddress)
+    toast.success("USDC sent successfully", {
+        action: {
+            label: "View in explorer",
+            onClick: () => window.open(`https://eth-sepolia.blockscout.com/op/${userOpHash}`, "_blank"),
+        },
+        position: "top-center",
+    })
+  }
+
   console.log(balance, stealthAddress)
 
   return (
@@ -45,7 +62,7 @@ export function StealthRow({
       </TableCell>
 
       <TableCell>
-        <Button variant="outline">Shield</Button>
+        <Button variant="outline" onClick={handleSend} disabled={isSending || !toAddress}>Send</Button>
       </TableCell>
     </TableRow>
   );

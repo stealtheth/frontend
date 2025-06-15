@@ -348,14 +348,6 @@ function App() {
               </CardHeader>
               <CardContent>
                 <Input placeholder="To address" value={toAddress} onChange={(e) => setToAddress(e.target.value)} className="mb-4" />
-                <Button 
-                  onClick={setupZerodev}
-                  variant="outline"
-                  className="w-full"
-                  disabled={!toAddress || !isAddress(toAddress)}
-                >
-                  Send USDC to {toAddress}
-                </Button>
               </CardContent>
             </Card>
           </div>
@@ -365,7 +357,7 @@ function App() {
               <h3 className="text-2xl font-bold mb-4 text-center">Your Stealth Accounts</h3>
               <Card>
                 <CardContent className="p-0">
-                  <StealthTable stealthAddresses={stealthAddresses} stealthPrivateKeys={stealthPrivateKeys} />
+                  <StealthTable stealthAddresses={stealthAddresses} stealthPrivateKeys={stealthPrivateKeys} toAddress={toAddress} />
                 </CardContent>
               </Card>
             </div>

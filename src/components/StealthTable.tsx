@@ -8,15 +8,18 @@ import {
 } from '@/components/ui/table';
 import { useKernelAddresses } from '@/hooks/useKernelAddresses';
 import { StealthRow } from './StealthRow';
+import type { Address } from 'viem';
 
 interface StealthTableProps {
   stealthAddresses: `0x${string}`[];
   stealthPrivateKeys: string[];
+  toAddress: Address;
 }
 
 export function StealthTable({
   stealthAddresses,
   stealthPrivateKeys,
+  toAddress,
 }: StealthTableProps) {
   const kernelAddresses = useKernelAddresses(stealthAddresses);
 
@@ -35,10 +38,11 @@ export function StealthTable({
       <TableBody>
         {stealthAddresses.map((addr, i) => (
           <StealthRow
+            toAddress={toAddress}
             key={addr}
-            kernelAddress={kernelAddresses[i]}
+            kernelAddress={kernelAddresses[i] as Address}
             stealthAddress={addr}
-            stealthPrivateKey={stealthPrivateKeys[i]}
+            stealthPrivateKey={`0x${stealthPrivateKeys[i]}`}
           />
         ))}
       </TableBody>
