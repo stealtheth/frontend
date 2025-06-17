@@ -62,7 +62,7 @@ export function StealthRow({
       </TableCell>
 
       <TableCell>
-        <Button variant="outline" onClick={handleSend} disabled={isSending || !toAddress}>Send</Button>
+        <Button variant="outline" onClick={handleSend} disabled={isSending || !toAddress}>Shield</Button>
       </TableCell>
     </TableRow>
   );
