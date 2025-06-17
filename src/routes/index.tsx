@@ -72,7 +72,7 @@ function Header() {
 function Footer() {
   return (
     <footer className="text-center p-4 border-t">
-      <p>Built for the ETHGlobal Brussels Hackathon</p>
+      <p>Built for the W3PN Hackathon Berlin 2025</p>
     </footer>
   );
 }
